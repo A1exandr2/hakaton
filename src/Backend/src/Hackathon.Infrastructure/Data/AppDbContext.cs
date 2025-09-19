@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
-using Hackathon.Domain;
+using Hackathon.Domain.Entities;
+
+namespace Hackathon.Infrastructure.Data;
 
 public class AppDbContext : DbContext
 {
@@ -32,13 +34,12 @@ public class AppDbContext : DbContext
         {
             entity.HasKey(u => u.Id);
 
-            entity.Property(u => u.Host)
-            .HasMaxLength(255);
-
-            entity.Property(u => u.Port);
+            entity.Property(u => u.Ip)
+            .HasMaxLength(255).IsRequired();
 
             entity.Property(u => u.Name)
-            .HasMaxLength(350);
+            .HasMaxLength(350)
+            .IsRequired();
 
             entity.HasIndex(u => u.Name)
             .IsUnique();

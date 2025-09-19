@@ -1,4 +1,4 @@
-using Hackathon.Domain;
+using Hackathon.Domain.Entities;
 
 namespace Hackathon.Api.Models;
 
