@@ -1,16 +1,32 @@
-namespace coo_backend.Exceptions;
-    public class NotFoundException : Exception
+using Hackathon.Application.Common.Models;
+using Hackathon.Application.DTOs;
+using Hackathon.Application.Users.Commands.CreateUser;
+using Hackathon.Application.Users.Queries.GetUserByIdQuery;
+using Microsoft.AspNetCore.Mvc;
+
+namespace CleanArchitecture.API.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class UsersController : ApiControllerBase
+{
+    [HttpPost]
+    public async Task<ActionResult<int>> CreateUser(CreateUserCommand command)
     {
-        public NotFoundException() : base("ресурс не найден") 
-        { }
+        var result = await Mediator.Send(command);
 
-        public NotFoundException(string entityName, object key)
-            : base($"сущность: {entityName}, с ключом: {key} не найдена")
-        {
-            EntityName = entityName;
-            Key = key;
-        }
-
-        public string? EntityName { get; }
-        public object? Key { get; }
+        return HandleResult(result);
     }
+
+    [HttpGet("{id}")]
+    public async Task<ActionResult<UserDto>> GetUser([FromRoute] int id)
+    {
+        var query = new GetUserByIdQuery(id);
+        var result = await Mediator.Send(query);
+
+        return result.Match<UserDto, ActionResult>(
+            Ok,
+            errors => NotFound(string.Join(", ", errors))
+        );
+    }
+}

@@ -11,8 +11,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Hackathon.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20250919112159_InitialMigration")]
-    partial class InitialMigration
+    [Migration("20250919135527_InitialMigrations")]
+    partial class InitialMigrations
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -38,6 +38,7 @@ namespace Hackathon.Infrastructure.Migrations
                         .HasColumnType("character varying(255)");
 
                     b.Property<string>("Name")
+                        .IsRequired()
                         .HasMaxLength(350)
                         .HasColumnType("character varying(350)");
 

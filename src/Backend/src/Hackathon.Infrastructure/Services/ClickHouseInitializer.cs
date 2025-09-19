@@ -57,16 +57,16 @@ public class ClickHouseInitializer
     private async Task CreatePingLogsTableAsync(ClickHouseConnection connection, CancellationToken ct)
     {
         const string createTableQuery = @"
-            CREATE TABLE monitoring.ping_logs (
-                id Int32,
-                server_id UInt32,
-                timestamp DateTime64(3) DEFAULT now64(3),
-                response_time_ms Float32,
-                success UInt8 DEFAULT 1,
-                error_message String DEFAULT ''
-            ) ENGINE = MergeTree()
-            ORDER BY (server_id, timestamp)
-            TTL timestamp + INTERVAL 90 DAY;
+        CREATE TABLE monitoring.ping_logs (
+        server_id UInt32,
+        timestamp DateTime64(3) DEFAULT now64(3),
+        response_time_ms Float32,
+        success UInt8 DEFAULT 1,
+        error_message String DEFAULT ''
+        ) ENGINE = MergeTree()
+        ORDER BY (server_id, timestamp)
+        TTL timestamp + INTERVAL 90 DAY;
+
         ";
 
         await ExecuteCommandAsync(connection, createTableQuery, ct);

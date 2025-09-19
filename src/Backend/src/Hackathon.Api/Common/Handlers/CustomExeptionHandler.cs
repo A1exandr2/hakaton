@@ -1,42 +1,40 @@
-using Microsoft.AspNetCore.Diagnostics;
-using Hackathon.Api.Models;
 using Hackathon.Application.DTOs.Exceptions;
+using Hellang.Middleware.ProblemDetails;
 
-namespace Hackathon.Api.Handlers;
+namespace CleanArchitecture.API.Common;
 
-public class CustomExeptionHandler : IExceptionHandler
+public static class GlobalExceptionHandler
 {
-    public ILogger<CustomExeptionHandler> _logger;
-    public CustomExeptionHandler(ILogger<CustomExeptionHandler> logger)
+    public static IServiceCollection AddGlobalExceptionHandler(
+        this IServiceCollection services
+    )
     {
-        _logger = logger;
-    }
-
-    public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
-    {
-        _logger.LogError(exception, $"Error handeled: {exception.Message}");
-
-        var (statusCode, title, errors) = exception switch
+        services.AddProblemDetails(options =>
         {
-            ValidationException validationException => (StatusCodes.Status400BadRequest, "VALIDATION_ERROR", validationException.Errors),
-            ArgumentNullException => (StatusCodes.Status400BadRequest, "ARGUMENT_NULL_ERROR", null),
-            ArgumentException => (StatusCodes.Status400BadRequest, "ARGUMENT_ERROR", null),
-            NotFoundException => (StatusCodes.Status404NotFound, "NOT_FOUND", null),
-            _ => (StatusCodes.Status500InternalServerError, "SERVER_ERROR", null)
-        };
+            options.IncludeExceptionDetails = (ctx, ex) => false;
 
-        httpContext.Response.StatusCode = statusCode;
+            options.Map<ValidationException>(ex => new Microsoft.AspNetCore.Mvc.ProblemDetails
+            {
+                Title = "Validation Error",
+                Status = StatusCodes.Status400BadRequest,
+                Detail = ex.Message,
+            });
 
-        await httpContext.Response.WriteAsJsonAsync(new ErrorResponse
-        {
-            Title = title,
-            Errors = errors,
-            Message = exception.Message,
-            StatusCode = statusCode,
-            TraceId = httpContext.TraceIdentifier
+            options.Map<NotFoundException>(ex => new Microsoft.AspNetCore.Mvc.ProblemDetails
+            {
+                Title = "Not Found",
+                Status = StatusCodes.Status404NotFound,
+                Detail = ex.Message,
+            });
+
+            options.Map<Hackathon.Domain.Exceptions.DomainException>(ex => new Microsoft.AspNetCore.Mvc.ProblemDetails
+            {
+                Title = "Domain Error",
+                Status = StatusCodes.Status400BadRequest,
+                Detail = ex.Message,
+            });
         });
 
-        return true;
+        return services;
     }
-
 }

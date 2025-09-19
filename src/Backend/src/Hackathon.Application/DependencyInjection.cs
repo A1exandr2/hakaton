@@ -8,7 +8,7 @@ namespace Hackathon.Application;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddInfrastructure(
+    public static IServiceCollection AddApplication(
         this IServiceCollection services
     )
     {

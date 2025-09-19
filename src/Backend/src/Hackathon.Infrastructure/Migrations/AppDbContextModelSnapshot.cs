@@ -35,6 +35,7 @@ namespace Hackathon.Infrastructure.Migrations
                         .HasColumnType("character varying(255)");
 
                     b.Property<string>("Name")
+                        .IsRequired()
                         .HasMaxLength(350)
                         .HasColumnType("character varying(350)");
 

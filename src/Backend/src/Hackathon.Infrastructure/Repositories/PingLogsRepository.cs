@@ -1,8 +1,7 @@
 // Hackathon.Infrastructure/Repositories/PingLogsRepository.cs
 using ClickHouse.Client.ADO;
+using ClickHouse.Client.ADO.Parameters;
 using Microsoft.Extensions.Configuration;
-using System.Globalization;
-using System.Text;
 using Hackathon.Application.DTOs.Exceptions;
 using Hackathon.Domain.Entities;
 using Hackathon.Domain.Repositories;
@@ -23,65 +22,75 @@ public class PingLogsRepository : IPingLogsRepository
     {
         const string query = @"
             INSERT INTO monitoring.ping_logs 
-            (id, server_id, timestamp, response_time_ms, success, error_message)
-            VALUES (@id, @server_id, @timestamp, @response_time_ms, @success, @error_message)";
+            (server_id, timestamp, response_time_ms, success, error_message)
+            VALUES (@server_id, @timestamp, @response_time_ms, @success, @error_message)";
 
-        await using var connection = new ClickHouseConnection(_connectionString);
-        await connection.OpenAsync(ct);
-
+        await using var connection = await OpenConnectionAsync(ct);
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = query;
 
-        AddParameter(cmd, "id", log.Id);
         AddParameter(cmd, "server_id", log.ServerId);
         AddParameter(cmd, "timestamp", log.Timestamp);
         AddParameter(cmd, "response_time_ms", log.ResponseTimeMs);
         AddParameter(cmd, "success", log.Success ? (byte)1 : (byte)0);
-        AddParameter(cmd, "error_message", log.ErrorMessage);
+        AddParameter(cmd, "error_message", log.ErrorMessage ?? string.Empty);
 
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
+
     public async Task InsertBatchAsync(IEnumerable<PingLog> logs, CancellationToken ct = default)
     {
-        var sb = new StringBuilder();
-        sb.AppendLine("INSERT INTO monitoring.ping_logs (id, server_id, timestamp, response_time_ms, success, error_message) VALUES");
+        const string query = @"
+            INSERT INTO monitoring.ping_logs 
+            (server_id, timestamp, response_time_ms, success, error_message) 
+            VALUES (@server_id, @timestamp, @response_time_ms, @success, @error_message)";
 
-        var isFirst = true;
-        foreach (var log in logs)
-        {
-            if (!isFirst) sb.Append(",");
-            isFirst = false;
+        var logsArray = logs.ToArray();
+        if (!logsArray.Any()) return;
 
-            sb.Append($"(");
-            sb.Append($"{log.Id}, "); // Int32 → не нужно оборачивать в ''
-            sb.Append($"{log.ServerId}, ");
-            sb.Append($"'{log.Timestamp:yyyy-MM-dd HH:mm:ss.fff}', ");
-            sb.Append($"{log.ResponseTimeMs.ToString(CultureInfo.InvariantCulture)}, ");
-            sb.Append($"{(log.Success ? 1 : 0)}, ");
-            sb.Append($"'{EscapeString(log.ErrorMessage)}'");
-            sb.Append($")");
-        }
-
-        await using var connection = new ClickHouseConnection(_connectionString);
-        await connection.OpenAsync(ct);
-
+        await using var connection = await OpenConnectionAsync(ct);
         await using var cmd = connection.CreateCommand();
-        cmd.CommandText = sb.ToString();
+        cmd.CommandText = query;
+
+        cmd.Parameters.Add(new ClickHouseDbParameter
+        {
+            ParameterName = "server_id",
+            Value = logsArray.Select(l => l.ServerId).ToArray()
+        });
+        cmd.Parameters.Add(new ClickHouseDbParameter
+        {
+            ParameterName = "timestamp",
+            Value = logsArray.Select(l => l.Timestamp).ToArray()
+        });
+        cmd.Parameters.Add(new ClickHouseDbParameter
+        {
+            ParameterName = "response_time_ms",
+            Value = logsArray.Select(l => l.ResponseTimeMs).ToArray()
+        });
+        cmd.Parameters.Add(new ClickHouseDbParameter
+        {
+            ParameterName = "success",
+            Value = logsArray.Select(l => l.Success ? (byte)1 : (byte)0).ToArray()
+        });
+        cmd.Parameters.Add(new ClickHouseDbParameter
+        {
+            ParameterName = "error_message",
+            Value = logsArray.Select(l => l.ErrorMessage ?? string.Empty).ToArray()
+        });
+
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
     public async Task<List<PingLog>> GetByServerIdAsync(uint serverId, DateTime from, DateTime to, CancellationToken ct = default)
     {
         const string query = @"
-            SELECT id, timestamp, response_time_ms, success, error_message
+            SELECT timestamp, response_time_ms, success, error_message
             FROM monitoring.ping_logs
             WHERE server_id = @server_id AND timestamp >= @from AND timestamp <= @to
             ORDER BY timestamp DESC";
 
-        await using var connection = new ClickHouseConnection(_connectionString);
-        await connection.OpenAsync(ct);
-
+        await using var connection = await OpenConnectionAsync(ct);
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = query;
 
@@ -94,30 +103,27 @@ public class PingLogsRepository : IPingLogsRepository
         while (await reader.ReadAsync(ct))
         {
             logs.Add(new PingLog(
-                reader.GetDateTime(1),
+                reader.GetDateTime(0),
                 serverId,
-                reader.GetFloat(2),
-                reader.GetFieldValue<byte>(3) == 1,
-                reader.GetString(4),
-                reader.GetFieldValue<int>(0)
+                reader.GetFloat(1),
+                reader.GetFieldValue<byte>(2) == 1,
+                reader.GetString(3)
             ));
         }
 
         return logs;
     }
 
-    public async Task<PingLog> GetLastByServerIdAsync(uint serverId, DateTime from, DateTime to, CancellationToken ct = default)
+    public async Task<PingLog?> GetLastByServerIdAsync(uint serverId, DateTime from, DateTime to, CancellationToken ct = default)
     {
         const string query = @"
-            SELECT id, timestamp, response_time_ms, success, error_message
+            SELECT timestamp, response_time_ms, success, error_message
             FROM monitoring.ping_logs
             WHERE server_id = @server_id AND timestamp >= @from AND timestamp <= @to
             ORDER BY timestamp DESC
             LIMIT 1";
 
-        await using var connection = new ClickHouseConnection(_connectionString);
-        await connection.OpenAsync(ct);
-
+        await using var connection = await OpenConnectionAsync(ct);
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = query;
 
@@ -129,16 +135,15 @@ public class PingLogsRepository : IPingLogsRepository
         if (await reader.ReadAsync(ct))
         {
             return new PingLog(
-                reader.GetDateTime(1),
+                reader.GetDateTime(0),
                 serverId,
-                reader.GetFloat(2),
-                reader.GetFieldValue<byte>(3) == 1,
-                reader.GetString(4),
-                reader.GetFieldValue<int>(0)
+                reader.GetFloat(1),
+                reader.GetFieldValue<byte>(2) == 1,
+                reader.GetString(3)
             );
         }
 
-        throw new NotFoundException(nameof(PingLog), serverId);
+        return null;
     }
 
     public async Task<PingStats> GetStatsAsync(uint serverId, DateTime from, DateTime to, CancellationToken ct = default)
@@ -152,9 +157,7 @@ public class PingLogsRepository : IPingLogsRepository
             FROM monitoring.ping_logs
             WHERE server_id = @server_id AND timestamp >= @from AND timestamp <= @to";
 
-        await using var connection = new ClickHouseConnection(_connectionString);
-        await connection.OpenAsync(ct);
-
+        await using var connection = await OpenConnectionAsync(ct);
         await using var cmd = connection.CreateCommand();
         cmd.CommandText = query;
 
@@ -176,17 +179,18 @@ public class PingLogsRepository : IPingLogsRepository
         return new PingStats(0, 0, 0, null);
     }
 
+    private async Task<ClickHouseConnection> OpenConnectionAsync(CancellationToken ct)
+    {
+        var connection = new ClickHouseConnection(_connectionString);
+        await connection.OpenAsync(ct);
+        return connection;
+    }
+
     private static void AddParameter(ClickHouseCommand cmd, string name, object value)
     {
         var param = cmd.CreateParameter();
         param.ParameterName = name;
         param.Value = value;
         cmd.Parameters.Add(param);
-    }
-
-    private static string EscapeString(string s)
-    {
-        if (string.IsNullOrEmpty(s)) return string.Empty;
-        return s.Replace("'", "''").Replace("\\", "\\\\");
     }
 }

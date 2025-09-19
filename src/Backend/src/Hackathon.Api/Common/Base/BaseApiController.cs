@@ -1,16 +1,18 @@
-using Microsoft.AspNetCore.Mvc;
+using Hackathon.Application.Common.Models;
 using MediatR;
+using Microsoft.AspNetCore.Mvc;
 
-namespace Hackathon.Api.Base;
+namespace CleanArchitecture.API.Controllers;
 
-[ApiController]
-[Route("api/[controller]/[action]")]
-public abstract class BaseApiController : ControllerBase
+public abstract class ApiControllerBase : ControllerBase
 {
-    protected readonly ISender _sender;
+    private ISender? _mediator;
 
-    protected BaseApiController(ISender sender)
+    protected ISender Mediator => _mediator ??= HttpContext.RequestServices.GetRequiredService<ISender>();
+
+    protected ActionResult<T> HandleResult<T>(Result<T> result)
     {
-        _sender = sender;
+        if (result.Succeeded) return Ok(result.Value);
+        return BadRequest(result.Errors);
     }
 }

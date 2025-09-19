@@ -1,6 +1,6 @@
 namespace Hackathon.Domain.Entities;
 
-public class PingLog : BaseEntity
+public class PingLog
 {
     public uint ServerId { get; set; } 
     public DateTime Timestamp { get; set; }
@@ -12,8 +12,7 @@ public class PingLog : BaseEntity
         uint serverId,
         float responseTimeMs,
         bool success,
-        string errorMessage,
-        int Id) : base(Id)
+        string errorMessage)
     {
         ServerId = serverId;
         Timestamp = timestamp;
